@@ -62,10 +62,23 @@
     #input-container button:hover {
       background-color: #0056b3;
     }
+    #room-select {
+      margin-bottom: 10px;
+    }
   </style>
 </head>
 <body>
-  <div id="chat-container">
+  <div id="room-select">
+    <label for="room">Select Room: </label>
+    <select id="room">
+      <option value="general">General</option>
+      <option value="tech">Tech</option>
+      <option value="random">Random</option>
+    </select>
+    <button id="join-room-button">Join Room</button>
+  </div>
+
+  <div id="chat-container" style="display: none;">
     <div id="messages"></div>
     <div id="input-container">
       <input type="text" id="message-input" placeholder="Type your message..." />
@@ -76,11 +89,15 @@
   <script>
     const serverUrl = "ws://localhost:5000/chat"; // Replace with your server address
     let socket;
+    let currentRoom = "general"; // Default room
 
     document.addEventListener("DOMContentLoaded", () => {
+      const roomSelect = document.getElementById("room");
+      const joinRoomButton = document.getElementById("join-room-button");
       const messagesContainer = document.getElementById("messages");
       const input = document.getElementById("message-input");
       const sendButton = document.getElementById("send-button");
+      const chatContainer = document.getElementById("chat-container");
 
       const username = prompt("Enter your username:");
       if (!username) {
@@ -88,41 +105,57 @@
         return;
       }
 
+      joinRoomButton.addEventListener("click", () => {
+        const selectedRoom = roomSelect.value;
+        if (selectedRoom !== currentRoom) {
+          currentRoom = selectedRoom;
+          joinRoom();
+        }
+      });
+
       // Connect to the WebSocket server
-      socket = new WebSocket(serverUrl);
-
-      socket.onopen = () => {
-        console.log("Connected to the server");
-        socket.send(JSON.stringify({ username })); // Initial handshake
-      };
-
-      socket.onmessage = (event) => {
-        const message = JSON.parse(event.data);
-        const messageDiv = document.createElement("div");
-        messageDiv.className = "message";
-
-        if (message.system) {
-          messageDiv.className += " system";
-          messageDiv.textContent = message.content;
-        } else {
-          messageDiv.innerHTML = `<strong>${message.username}:</strong> ${message.content}`;
+      function joinRoom() {
+        if (socket) {
+          socket.close(); // Close the previous connection if it exists
         }
 
-        messagesContainer.appendChild(messageDiv);
-        messagesContainer.scrollTop = messagesContainer.scrollHeight; // Auto-scroll to the latest message
-      };
+        socket = new WebSocket(`${serverUrl}/${currentRoom}`);
 
-      socket.onclose = () => {
-        console.log("Disconnected from the server");
-        const messageDiv = document.createElement("div");
-        messageDiv.className = "message system";
-        messageDiv.textContent = "You have been disconnected.";
-        messagesContainer.appendChild(messageDiv);
-      };
+        socket.onopen = () => {
+          console.log(`Connected to ${currentRoom} room`);
+          socket.send(JSON.stringify({ username, room: currentRoom })); // Initial handshake
+          chatContainer.style.display = "flex"; // Show chat container
+        };
 
-      socket.onerror = (error) => {
-        console.error("WebSocket error:", error);
-      };
+        socket.onmessage = (event) => {
+          const message = JSON.parse(event.data);
+          console.log(message)
+          const messageDiv = document.createElement("div");
+          messageDiv.className = "message";
+
+          if (message.system) {
+            messageDiv.className += " system";
+            messageDiv.textContent = message.content;
+          } else {
+            messageDiv.innerHTML = `<strong>${message.username}:</strong> ${message.content}`;
+          }
+
+          messagesContainer.appendChild(messageDiv);
+          messagesContainer.scrollTop = messagesContainer.scrollHeight; // Auto-scroll to the latest message
+        };
+
+        socket.onclose = () => {
+          console.log("Disconnected from the server");
+          const messageDiv = document.createElement("div");
+          messageDiv.className = "message system";
+          messageDiv.textContent = "You have been disconnected.";
+          messagesContainer.appendChild(messageDiv);
+        };
+
+        socket.onerror = (error) => {
+          console.error("WebSocket error:", error);
+        };
+      }
 
       sendButton.addEventListener("click", () => {
         sendMessage();

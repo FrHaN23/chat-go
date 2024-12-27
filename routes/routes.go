@@ -15,6 +15,5 @@ func NewRoutes(mux *mux.Router) {
 	mux.Handle("/ws", ws)
 
 	chatServer := handler.NewChatServer(context.Background())
-
-	mux.Handle("/chat", chatServer)
+	mux.Handle("/chat/{room}", chatServer)
 }
