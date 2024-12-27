@@ -1,0 +1,6 @@
+/vendor
+.env
+/vendor
+/target
+go.work
+go.work.sum

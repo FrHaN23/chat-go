@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebSocket Chat</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background-color: #f4f4f4;
+    }
+    #chat-container {
+      width: 100%;
+      max-width: 600px;
+      height: 80vh;
+      display: flex;
+      flex-direction: column;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      overflow: hidden;
+    }
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+      border-bottom: 1px solid #ddd;
+    }
+    #messages .message {
+      margin: 5px 0;
+    }
+    #messages .message.system {
+      color: gray;
+      font-style: italic;
+    }
+    #input-container {
+      display: flex;
+      padding: 10px;
+      gap: 10px;
+    }
+    #input-container input {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+    }
+    #input-container button {
+      padding: 10px 20px;
+      border: none;
+      background-color: #007bff;
+      color: #fff;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    #input-container button:hover {
+      background-color: #0056b3;
+    }
+  </style>
+</head>
+<body>
+  <div id="chat-container">
+    <div id="messages"></div>
+    <div id="input-container">
+      <input type="text" id="message-input" placeholder="Type your message..." />
+      <button id="send-button">Send</button>
+    </div>
+  </div>
+
+  <script>
+    const serverUrl = "ws://localhost:5000/chat"; // Replace with your server address
+    let socket;
+
+    document.addEventListener("DOMContentLoaded", () => {
+      const messagesContainer = document.getElementById("messages");
+      const input = document.getElementById("message-input");
+      const sendButton = document.getElementById("send-button");
+
+      const username = prompt("Enter your username:");
+      if (!username) {
+        alert("Username is required to join the chat!");
+        return;
+      }
+
+      // Connect to the WebSocket server
+      socket = new WebSocket(serverUrl);
+
+      socket.onopen = () => {
+        console.log("Connected to the server");
+        socket.send(JSON.stringify({ username })); // Initial handshake
+      };
+
+      socket.onmessage = (event) => {
+        const message = JSON.parse(event.data);
+        const messageDiv = document.createElement("div");
+        messageDiv.className = "message";
+
+        if (message.system) {
+          messageDiv.className += " system";
+          messageDiv.textContent = message.content;
+        } else {
+          messageDiv.innerHTML = `<strong>${message.username}:</strong> ${message.content}`;
+        }
+
+        messagesContainer.appendChild(messageDiv);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight; // Auto-scroll to the latest message
+      };
+
+      socket.onclose = () => {
+        console.log("Disconnected from the server");
+        const messageDiv = document.createElement("div");
+        messageDiv.className = "message system";
+        messageDiv.textContent = "You have been disconnected.";
+        messagesContainer.appendChild(messageDiv);
+      };
+
+      socket.onerror = (error) => {
+        console.error("WebSocket error:", error);
+      };
+
+      sendButton.addEventListener("click", () => {
+        sendMessage();
+      });
+
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          sendMessage();
+        }
+      });
+
+      function sendMessage() {
+        const messageContent = input.value.trim();
+        if (messageContent) {
+          const message = { content: messageContent };
+          socket.send(JSON.stringify(message));
+          input.value = ""; // Clear the input field
+        }
+      }
+    });
+  </script>
+</body>
+</html>
