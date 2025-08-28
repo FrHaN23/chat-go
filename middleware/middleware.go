@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/frhan23/chat-go/dotnev"
+	dotenv "github.com/frhan23/chat-go/dotnev"
 	"github.com/frhan23/chat-go/res"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -40,7 +40,7 @@ func Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		parsedToken, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
+		parsedToken, err := jwt.Parse(tokenString, func(t *jwt.Token) (any, error) {
 			if _, ok := t.Method.(*jwt.SigningMethodHMAC); ok {
 				return []byte(dotenv.Env("JWT_SECRET")), nil
 			}

@@ -9,7 +9,6 @@ import (
 	"github.com/gorilla/mux"
 )
 
-
 func main() {
 	route := mux.NewRouter()
 	routes.NewRoutes(route)

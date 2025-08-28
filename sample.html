@@ -65,6 +65,43 @@
     #room-select {
       margin-bottom: 10px;
     }
+
+    #messages .message {
+      margin: 8px 0;
+      padding: 6px 10px;
+      border-radius: 5px;
+      background: #f9f9f9;
+    }
+
+    #messages .message .message-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.9em;
+      margin-bottom: 3px;
+    }
+
+    #messages .message .username {
+      font-weight: bold;
+      color: #333;
+    }
+
+    #messages .message .timestamp {
+      font-size: 0.8em;
+      color: #888;
+    }
+
+    #messages .message .message-content {
+      font-size: 1em;
+      color: #444;
+    }
+
+    #messages .message.system {
+      background: none;
+      color: gray;
+      font-style: italic;
+      text-align: center;
+    }
+
   </style>
 </head>
 <body>
@@ -133,11 +170,24 @@
           const messageDiv = document.createElement("div");
           messageDiv.className = "message";
 
+          const date = new Date(message.timestamp);
+
+          const options = {
+            weekday: "long",
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+          };
+
           if (message.system) {
             messageDiv.className += " system";
             messageDiv.textContent = message.content;
           } else {
-            messageDiv.innerHTML = `<strong>${message.username}:</strong> ${message.content}`;
+            messageDiv.innerHTML = `    <div class="message-header">
+              <span class="username">${message.username}</span>
+              <span class="timestamp">${date.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}</span>
+            </div>
+            <div class="message-content">${message.content}</div>`
           }
 
           messagesContainer.appendChild(messageDiv);

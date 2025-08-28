@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
@@ -36,17 +37,20 @@ type ChatServer struct {
 }
 
 type Message struct {
-	SenderID string `json:"sender_id"`
-	Username string `json:"username"`
-	Content  string `json:"content"`
-	System   bool   `json:"system"`
-	Room     string `json:"room"`
+	SenderID  string    `json:"sender_id"`
+	Username  string    `json:"username"`
+	Content   string    `json:"content"`
+	System    bool      `json:"system"`
+	Room      string    `json:"room"`
+	TimeStamp time.Time `json:"timestamp"`
 }
 
 // ServeHTTP handles WebSocket connections
 func (cs *ChatServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	upgrader := websocket.Upgrader{
-		CheckOrigin: func(r *http.Request) bool { return true },
+		CheckOrigin: func(r *http.Request) bool {
+			return true
+		},
 	}
 
 	vars := mux.Vars(r)
@@ -93,72 +97,71 @@ func (cs *ChatServer) Stop() {
 
 // run starts the server loop to handle clients and messages
 func (cs *ChatServer) run(ctx context.Context) {
-    for {
-        select {
-        case <-ctx.Done():
-            log.Println("Shutting down ChatServer...")
-            return
+	for {
+		select {
+		case <-ctx.Done():
+			log.Println("Shutting down ChatServer...")
+			return
 
-        // New client registration
-        case client := <-cs.Register:
-            cs.Mutex.Lock()
-            room, exists := cs.Rooms[client.Room]
-            if !exists {
-                room = &Room{
-                    Name:    client.Room,
-                    Clients: make(map[*Client]bool),
-                }
-                cs.Rooms[client.Room] = room
-            }
-            // Register client in the room
-            room.Clients[client] = true
-            cs.Clients[client] = true
-            cs.Mutex.Unlock()
-            log.Printf("New client connected: %s (%s) to room %s", client.Username, client.ID, client.Room)
-            cs.broadcastSystemMessage(client.Room, client.Username+" has joined the room")
+		// New client registration
+		case client := <-cs.Register:
+			cs.Mutex.Lock()
+			room, exists := cs.Rooms[client.Room]
+			if !exists {
+				room = &Room{
+					Name:    client.Room,
+					Clients: make(map[*Client]bool),
+				}
+				cs.Rooms[client.Room] = room
+			}
+			// Register client in the room
+			room.Clients[client] = true
+			cs.Clients[client] = true
+			cs.Mutex.Unlock()
+			log.Printf("New client connected: %s (%s) to room %s", client.Username, client.ID, client.Room)
+			cs.broadcastSystemMessage(client.Room, client.Username+" has joined the room")
 
-        // Client unregistering (disconnection)
-        case client := <-cs.Unregister:
-            cs.Mutex.Lock()
-            if room, exists := cs.Rooms[client.Room]; exists {
-                delete(room.Clients, client)
-                close(client.Send)
-                log.Printf("Client disconnected: %s (%s) from room %s", client.Username, client.ID, client.Room)
-                cs.broadcastSystemMessage(client.Room, client.Username+" has left the room")
-            }
-            cs.Mutex.Unlock()
+		// Client unregistering (disconnection)
+		case client := <-cs.Unregister:
+			cs.Mutex.Lock()
+			if room, exists := cs.Rooms[client.Room]; exists {
+				delete(room.Clients, client)
+				close(client.Send)
+				log.Printf("Client disconnected: %s (%s) from room %s", client.Username, client.ID, client.Room)
+				cs.broadcastSystemMessage(client.Room, client.Username+" has left the room")
+			}
+			cs.Mutex.Unlock()
 
-        // Message broadcasting
-        case message := <-cs.Broadcast:
-            cs.Mutex.Lock()
-            log.Printf("Broadcasting message: %v", message)
-            if room, exists := cs.Rooms[message.Room]; exists {
-                log.Printf("Clients in room %s: %d", message.Room, len(room.Clients))
-                for client := range room.Clients {
-                    log.Printf("Sending message to client: %s", client.Username)
-                    data, err := json.Marshal(message)
-                    if err != nil {
-                        log.Printf("Error marshaling message: %v", err)
-                        continue
-                    }
-                    log.Printf("Serialized message: %s", string(data))
+		// Message broadcasting
+		case message := <-cs.Broadcast:
+			cs.Mutex.Lock()
+			log.Printf("Broadcasting message: %v", message)
+			if room, exists := cs.Rooms[message.Room]; exists {
+				log.Printf("Clients in room %s: %d", message.Room, len(room.Clients))
+				for client := range room.Clients {
+					log.Printf("Sending message to client: %s", client.Username)
+					data, err := json.Marshal(message)
+					if err != nil {
+						log.Printf("Error marshaling message: %v", err)
+						continue
+					}
+					log.Printf("Serialized message: %s", string(data))
 
-                    // Attempt to send message
-                    select {
-                    case client.Send <- data:
-                        log.Printf("Message sent to client: %s", client.Username)
-                    default:
-                        log.Printf("Client send buffer full, unregistering: %s", client.Username)
-                        close(client.Send)
-                        delete(room.Clients, client)
-                    }
-                }
-            }
-            cs.Mutex.Unlock()
-        }
-    }
+					// Attempt to send message
+					select {
+					case client.Send <- data:
+						log.Printf("Message sent to client: %s", client.Username)
+					default:
+						log.Printf("Client send buffer full, unregistering: %s", client.Username)
+						close(client.Send)
+						delete(room.Clients, client)
+					}
+				}
+			}
+			cs.Mutex.Unlock()
+		}
+	}
 }
-
 
 // handshake performs the initial handshake and returns a new client
 func (cs *ChatServer) handshake(conn *websocket.Conn, room string) (*Client, error) {
@@ -190,7 +193,6 @@ func (cs *ChatServer) handleMessages(client *Client) {
 		cs.Unregister <- client
 		client.Connection.Close()
 	}()
-
 	for {
 		_, msg, err := client.Connection.ReadMessage()
 		if err != nil {
@@ -205,10 +207,11 @@ func (cs *ChatServer) handleMessages(client *Client) {
 		}
 
 		cs.Broadcast <- Message{
-			SenderID: client.ID,
-			Username: client.Username,
-			Content:  incoming.Content,
-			Room:     client.Room,
+			SenderID:  client.ID,
+			Username:  client.Username,
+			Content:   incoming.Content,
+			Room:      client.Room,
+			TimeStamp: time.Now(),
 		}
 	}
 }
@@ -226,10 +229,12 @@ func (cs *ChatServer) handleWrites(client *Client) {
 }
 
 func (cs *ChatServer) broadcastSystemMessage(roomName, content string) {
+
 	cs.Broadcast <- Message{
-		Username: "System",
-		Content:  content,
-		Room:     roomName,
-		System:   true,
+		Username:  "System",
+		Content:   content,
+		Room:      roomName,
+		System:    true,
+		TimeStamp: time.Now(),
 	}
 }
