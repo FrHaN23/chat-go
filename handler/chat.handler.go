@@ -229,7 +229,6 @@ func (cs *ChatServer) handleWrites(client *Client) {
 }
 
 func (cs *ChatServer) broadcastSystemMessage(roomName, content string) {
-
 	cs.Broadcast <- Message{
 		Username:  "System",
 		Content:   content,
